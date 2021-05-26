@@ -26,7 +26,7 @@
 /*  COMPONENT DEFINITION                                   RELEASE        */ 
 /*                                                                        */ 
 /*    ux_host_class_printer.h                             PORTABLE C      */ 
-/*                                                           6.0          */
+/*                                                           6.1          */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -41,6 +41,11 @@
 /*    DATE              NAME                      DESCRIPTION             */ 
 /*                                                                        */ 
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            used UX prefix to refer to  */
+/*                                            TX symbols instead of using */
+/*                                            them directly,              */
+/*                                            resulting in version 6.1    */
 /*                                                                        */
 /**************************************************************************/
 
@@ -86,7 +91,7 @@ typedef struct UX_HOST_CLASS_PRINTER_STRUCT
     UX_ENDPOINT     *ux_host_class_printer_bulk_in_endpoint;
     UINT            ux_host_class_printer_state;
     UCHAR           ux_host_class_printer_name[UX_HOST_CLASS_PRINTER_NAME_LENGTH];
-    TX_SEMAPHORE    ux_host_class_printer_semaphore;
+    UX_SEMAPHORE    ux_host_class_printer_semaphore;
 } UX_HOST_CLASS_PRINTER;
 
 
@@ -98,6 +103,7 @@ UINT    _ux_host_class_printer_deactivate(UX_HOST_CLASS_COMMAND *command);
 UINT    _ux_host_class_printer_endpoints_get(UX_HOST_CLASS_PRINTER *printer);
 UINT    _ux_host_class_printer_entry(UX_HOST_CLASS_COMMAND *command);
 UINT    _ux_host_class_printer_name_get(UX_HOST_CLASS_PRINTER *printer);
+UINT    _ux_host_class_printer_device_id_get(UX_HOST_CLASS_PRINTER *printer, UCHAR *descriptor_buffer, ULONG length);
 UINT    _ux_host_class_printer_read (UX_HOST_CLASS_PRINTER *printer, UCHAR *data_pointer, 
                                     ULONG requested_length, ULONG *actual_length);
 UINT    _ux_host_class_printer_soft_reset(UX_HOST_CLASS_PRINTER *printer);
@@ -109,6 +115,7 @@ UINT    _ux_host_class_printer_write(UX_HOST_CLASS_PRINTER *printer, UCHAR * dat
 
 #define   ux_host_class_printer_activate                               _ux_host_class_printer_activate
 #define   ux_host_class_printer_name_get                               _ux_host_class_printer_name_get
+#define   ux_host_class_printer_device_id_get                          _ux_host_class_printer_device_id_get
 #define   ux_host_class_printer_read                                   _ux_host_class_printer_read
 #define   ux_host_class_printer_soft_reset                             _ux_host_class_printer_soft_reset
 #define   ux_host_class_printer_status_get                             _ux_host_class_printer_status_get

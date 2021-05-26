@@ -35,7 +35,7 @@
 /*  FUNCTION                                               RELEASE        */
 /*                                                                        */
 /*    _ux_hcd_ehci_isochronous_endpoint_create            PORTABLE C      */
-/*                                                           6.0          */
+/*                                                           6.1.6        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -74,11 +74,24 @@
 /*    DATE              NAME                      DESCRIPTION             */
 /*                                                                        */
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            resulting in version 6.1    */
+/*  11-09-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            fixed compile warnings,     */
+/*                                            resulting in version 6.1.2  */
+/*  04-02-2021     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            fixed compile issues with   */
+/*                                            some macro options,         */
+/*                                            filled max transfer length, */
+/*                                            resulting in version 6.1.6  */
 /*                                                                        */
 /**************************************************************************/
 UINT  _ux_hcd_ehci_isochronous_endpoint_create(UX_HCD_EHCI *hcd_ehci, UX_ENDPOINT *endpoint)
 {
 #if UX_MAX_ISO_TD == 0
+
+    UX_PARAMETER_NOT_USED(hcd_ehci);
+    UX_PARAMETER_NOT_USED(endpoint);
 
     /* Error trap. */
     _ux_system_error_handler(UX_SYSTEM_LEVEL_THREAD, UX_SYSTEM_CONTEXT_HCD, UX_FUNCTION_NOT_SUPPORTED);
@@ -124,7 +137,7 @@ UINT                            status;
     device =  endpoint -> ux_endpoint_device;
 
     /* Get the interval value from endpoint descriptor.  */
-    interval = endpoint -> ux_endpoint_descriptor.bInterval;
+    interval = (UCHAR)endpoint -> ux_endpoint_descriptor.bInterval;
 
     /* For ISO, interval 1 ~ 16, means 2^(n-1).  */
     if (interval == 0)
@@ -133,10 +146,10 @@ UINT                            status;
         interval = 16;
 
     /* Interval shift is base 0.  */
-    interval_shift = interval - 1;
+    interval_shift = (UCHAR)(interval - 1);
 
     /* Keep interval as number of micro-frames.  */
-    interval = (1u << interval_shift);
+    interval = (UCHAR)(1u << interval_shift);
 
     /* Get max packet size.  */
     max_packet_size = endpoint -> ux_endpoint_descriptor.wMaxPacketSize & UX_MAX_PACKET_SIZE_MASK;
@@ -149,6 +162,10 @@ UINT                            status;
 
     /* Get max transfer size.  */
     max_trans_size = max_packet_size * mult;
+
+    /* We need to take into account the nature of the HCD to define the max size
+       of any transfer in the transfer request.  */
+    endpoint -> ux_endpoint_transfer_request.ux_transfer_request_maximum_length = max_trans_size;
 
     /* Get the Endpt, Device Address, I/O, Maximum Packet Size, Mult.  */
     endpt = (endpoint -> ux_endpoint_descriptor.bEndpointAddress << UX_EHCI_HSISO_ENDPT_SHIFT) & UX_EHCI_HSISO_ENDPT_MASK;
@@ -192,7 +209,7 @@ UINT                            status;
         if (interval > 2)
             ed -> ux_ehci_hsiso_ed_nb_tds = 1;
         else
-            ed -> ux_ehci_hsiso_ed_nb_tds = 4 >> interval_shift;
+            ed -> ux_ehci_hsiso_ed_nb_tds = (UCHAR)(4u >> interval_shift);
 
         /* Obtain iTDs.  */
         status = UX_SUCCESS;
@@ -211,7 +228,7 @@ UINT                            status;
             itd.itd_ptr -> ux_ehci_hsiso_td_ed = ed;
 
             /* Save max transfer size.  */
-            itd.itd_ptr -> ux_ehci_hsiso_td_max_trans_size = max_trans_size;
+            itd.itd_ptr -> ux_ehci_hsiso_td_max_trans_size = (USHORT)max_trans_size;
 
             /* Save the iTD for the micro-frame(s).  */
             ed -> ux_ehci_hsiso_ed_fr_td[i] = itd.itd_ptr;
@@ -252,7 +269,7 @@ UINT                            status;
     else if (interval > 8)
         poll_depth = 0;
     else
-        poll_depth = 8 - interval;
+        poll_depth = (UINT)(8u - interval);
 
     /* Keep only interval < 1ms for micro-frame calculation.  */
     interval_shift &= 0x3;
@@ -280,7 +297,7 @@ UINT                            status;
             itd.itd_ptr = ed -> ux_ehci_hsiso_ed_fr_td[i];
 
             /* Build next link pointer, if not last one.*/
-            if (i < ed -> ux_ehci_hsiso_ed_nb_tds - 1)
+            if (i < ed -> ux_ehci_hsiso_ed_nb_tds - 1u)
             {
                 lp.void_ptr = _ux_utility_physical_address(ed -> ux_ehci_hsiso_ed_fr_td[i + 1]);
                 itd.itd_ptr -> ux_ehci_hsiso_td_next_lp = lp;
@@ -416,13 +433,13 @@ UINT                            status;
                 if (split_last_size &&
                     i == ((microframe_i + split_count - 1) & 7))
                 {
-                    ed_anchor -> ux_ehci_ed_microframe_load[i] += split_last_size;
+                    ed_anchor -> REF_AS.ANCHOR.ux_ehci_ed_microframe_load[i] = (USHORT)(ed_anchor -> REF_AS.ANCHOR.ux_ehci_ed_microframe_load[i] + split_last_size);
                 }
                 else
-                    ed_anchor -> ux_ehci_ed_microframe_load[i] += 188;
+                    ed_anchor -> REF_AS.ANCHOR.ux_ehci_ed_microframe_load[i] = (USHORT)(ed_anchor -> REF_AS.ANCHOR.ux_ehci_ed_microframe_load[i] + 188u);
 
                 /* Increment SSplit count.  */
-                ed_anchor -> ux_ehci_ed_microframe_ssplit_count[i] ++;
+                ed_anchor -> REF_AS.ANCHOR.ux_ehci_ed_microframe_ssplit_count[i] ++;
             }
         }
         else
@@ -469,11 +486,11 @@ UINT                            status;
                     continue;
 
                 /* Add to load.  */
-                ed_anchor -> ux_ehci_ed_microframe_load[i] += 188;
+                ed_anchor -> REF_AS.ANCHOR.ux_ehci_ed_microframe_load[i] = (USHORT)(ed_anchor -> REF_AS.ANCHOR.ux_ehci_ed_microframe_load[i] + 188u);
             }
 
             /* Increment SSplit count.  */
-            ed_anchor -> ux_ehci_ed_microframe_ssplit_count[i] ++;
+            ed_anchor -> REF_AS.ANCHOR.ux_ehci_ed_microframe_ssplit_count[i] ++;
         }
 
     }
@@ -482,7 +499,7 @@ UINT                            status;
     {
 
         /* Save index base of allocated micro-frame.  */
-        ed -> ux_ehci_hsiso_ed_frindex = microframe_i;
+        ed -> ux_ehci_hsiso_ed_frindex = (UCHAR)microframe_i;
 
         /* Save anchor pointer.  */
         ed -> ux_ehci_hsiso_ed_anchor = ed_anchor;
@@ -492,7 +509,7 @@ UINT                            status;
         {
 
             /* Update anchor micro-frame loads.  */
-            ed_anchor -> ux_ehci_ed_microframe_load[i] += max_packet_size;
+            ed_anchor -> REF_AS.ANCHOR.ux_ehci_ed_microframe_load[i] = (USHORT)(ed_anchor -> REF_AS.ANCHOR.ux_ehci_ed_microframe_load[i] + max_packet_size);
 
             /* Initialize control with PG -> BP (3, 5).  */
             itd.itd_ptr = ed -> ux_ehci_hsiso_ed_fr_td[i >> 1];

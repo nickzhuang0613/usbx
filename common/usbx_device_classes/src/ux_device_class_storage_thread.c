@@ -35,7 +35,7 @@
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
 /*    _ux_device_class_storage_thread                     PORTABLE C      */ 
-/*                                                           6.0          */
+/*                                                           6.1.6        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -80,6 +80,7 @@
 /*    _ux_utility_long_get                  Get 32-bit value              */ 
 /*    _ux_utility_memory_allocate           Allocate memory               */ 
 /*    _ux_utility_semaphore_create          Create semaphore              */ 
+/*    _ux_utility_delay_ms                  Sleep thread for several ms   */
 /*    _ux_utility_thread_suspend            Suspend thread                */ 
 /*                                                                        */ 
 /*  CALLED BY                                                             */ 
@@ -91,6 +92,21 @@
 /*    DATE              NAME                      DESCRIPTION             */ 
 /*                                                                        */ 
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            used sleep instead of       */
+/*                                            relinquish on error,        */
+/*                                            optimized command logic,    */
+/*                                            used UX prefix to refer to  */
+/*                                            TX symbols instead of using */
+/*                                            them directly,              */
+/*                                            resulting in version 6.1    */
+/*  12-31-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            fixed USB CV test issues,   */
+/*                                            resulting in version 6.1.3  */
+/*  04-02-2021     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            fixed compile issues with   */
+/*                                            some macro options,         */
+/*                                            resulting in version 6.1.6  */
 /*                                                                        */
 /**************************************************************************/
 VOID  _ux_device_class_storage_thread(ULONG storage_class)
@@ -108,6 +124,7 @@ ULONG                       length;
 ULONG                       cbwcb_length;
 ULONG                       lun;
 UCHAR                       *scsi_command;
+UCHAR                       *cbw_cb;
 
 
     /* This thread runs forever but can be suspended or resumed.  */
@@ -158,7 +175,7 @@ UCHAR                       *scsi_command;
         
             /* Check state, they must be both RESET.  */
             if (endpoint_out -> ux_slave_endpoint_state == UX_ENDPOINT_RESET &&
-                !storage -> ux_slave_class_storage_phase_error)
+                (UCHAR)storage -> ux_slave_class_storage_csw_status != UX_SLAVE_CLASS_STORAGE_CSW_PHASE_ERROR)
             {
 
                 /* Send the request to the device controller.  */
@@ -179,9 +196,20 @@ UCHAR                       *scsi_command;
                 
                 /* Obtain the lun from the CBW.  */
                 lun =  (ULONG) *(scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_LUN);
+                storage -> ux_slave_class_storage_cbw_lun = (UCHAR)lun;
                 
                 /* We have to memorize the SCSI command tag for the CSW phase.  */
                 storage -> ux_slave_class_storage_lun[lun].ux_slave_class_storage_scsi_tag =  _ux_utility_long_get(scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_TAG);
+
+                /* Get dCBWDataTransferLength: number of bytes to transfer.  */
+                storage -> ux_slave_class_storage_host_length = _ux_utility_long_get(scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_DATA_LENGTH);
+
+                /* Save bmCBWFlags.  */
+                storage -> ux_slave_class_storage_cbw_flags = *(scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_FLAGS);
+
+                /* Reset CSW status.  */
+                storage -> ux_slave_class_storage_csw_residue = 0;
+                storage -> ux_slave_class_storage_csw_status = 0;
 
                 /* Ensure the LUN number is within our declared values and check the command 
                    content and format. First we make sure we have a complete CBW.  */
@@ -200,141 +228,142 @@ UCHAR                       *scsi_command;
                         {
 
                             /* Analyze the command stored in the CBWCB.  */
-                            switch (*(scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB))
+                            cbw_cb = scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB;
+                            switch (*(cbw_cb))
                             {
 
                             case UX_SLAVE_CLASS_STORAGE_SCSI_TEST_READY:
 
-                                _ux_device_class_storage_test_ready(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB);
+                                _ux_device_class_storage_test_ready(storage, lun, endpoint_in, endpoint_out, cbw_cb);
                                 break;
                                     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_REQUEST_SENSE:
 
-                                _ux_device_class_storage_request_sense(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB);
+                                _ux_device_class_storage_request_sense(storage, lun, endpoint_in, endpoint_out, cbw_cb);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_FORMAT:
 
-                                _ux_device_class_storage_format(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB);
+                                _ux_device_class_storage_format(storage, lun, endpoint_in, endpoint_out, cbw_cb);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_INQUIRY:
 
-                                _ux_device_class_storage_inquiry(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB);
+                                _ux_device_class_storage_inquiry(storage, lun, endpoint_in, endpoint_out, cbw_cb);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_START_STOP:
 
-                                _ux_device_class_storage_start_stop(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB);
+                                _ux_device_class_storage_start_stop(storage, lun, endpoint_in, endpoint_out, cbw_cb);
                                 break;
                                     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_PREVENT_ALLOW_MEDIA_REMOVAL:
 
-                                _ux_device_class_storage_prevent_allow_media_removal(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB);
+                                _ux_device_class_storage_prevent_allow_media_removal(storage, lun, endpoint_in, endpoint_out, cbw_cb);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_READ_FORMAT_CAPACITY:
 
-                                _ux_device_class_storage_read_format_capacity(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB);
+                                _ux_device_class_storage_read_format_capacity(storage, lun, endpoint_in, endpoint_out, cbw_cb);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_READ_CAPACITY:
 
-                                _ux_device_class_storage_read_capacity(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB);
+                                _ux_device_class_storage_read_capacity(storage, lun, endpoint_in, endpoint_out, cbw_cb);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_VERIFY:
 
-                                _ux_device_class_storage_verify(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB);
+                                _ux_device_class_storage_verify(storage, lun, endpoint_in, endpoint_out, cbw_cb);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_MODE_SELECT:
 
-                                _ux_device_class_storage_mode_select(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB);
+                                _ux_device_class_storage_mode_select(storage, lun, endpoint_in, endpoint_out, cbw_cb);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_MODE_SENSE_SHORT:
                             case UX_SLAVE_CLASS_STORAGE_SCSI_MODE_SENSE:
 
-                                _ux_device_class_storage_mode_sense(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB);
+                                _ux_device_class_storage_mode_sense(storage, lun, endpoint_in, endpoint_out, cbw_cb);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_READ32:
 
-                                _ux_device_class_storage_read(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB, 
+                                _ux_device_class_storage_read(storage, lun, endpoint_in, endpoint_out, cbw_cb, 
                                                                 UX_SLAVE_CLASS_STORAGE_SCSI_READ32);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_READ16:
 
-                                _ux_device_class_storage_read(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB, 
+                                _ux_device_class_storage_read(storage, lun, endpoint_in, endpoint_out, cbw_cb, 
                                                                 UX_SLAVE_CLASS_STORAGE_SCSI_READ16);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_WRITE32:
 
-                                _ux_device_class_storage_write(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB,
+                                _ux_device_class_storage_write(storage, lun, endpoint_in, endpoint_out, cbw_cb,
                                                                 UX_SLAVE_CLASS_STORAGE_SCSI_WRITE32);
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_WRITE16:
 
-                                _ux_device_class_storage_write(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB, 
+                                _ux_device_class_storage_write(storage, lun, endpoint_in, endpoint_out, cbw_cb, 
                                                                 UX_SLAVE_CLASS_STORAGE_SCSI_WRITE16);
                                 break;
 
                             case UX_SLAVE_CLASS_STORAGE_SCSI_SYNCHRONIZE_CACHE:
 
-                                _ux_device_class_storage_synchronize_cache(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB, *(scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB));
+                                _ux_device_class_storage_synchronize_cache(storage, lun, endpoint_in, endpoint_out, cbw_cb, *(cbw_cb));
                                 break;
 
 #ifdef UX_SLAVE_CLASS_STORAGE_INCLUDE_MMC
                             case UX_SLAVE_CLASS_STORAGE_SCSI_GET_STATUS_NOTIFICATION:
 
-                                _ux_device_class_storage_get_status_notification(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB); 
+                                _ux_device_class_storage_get_status_notification(storage, lun, endpoint_in, endpoint_out, cbw_cb); 
                                 break;
 
                             case UX_SLAVE_CLASS_STORAGE_SCSI_GET_CONFIGURATION:
 
-                                _ux_device_class_storage_get_configuration(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB); 
+                                _ux_device_class_storage_get_configuration(storage, lun, endpoint_in, endpoint_out, cbw_cb); 
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_READ_DISK_INFORMATION:
 
-                                _ux_device_class_storage_read_disk_information(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB); 
+                                _ux_device_class_storage_read_disk_information(storage, lun, endpoint_in, endpoint_out, cbw_cb); 
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_REPORT_KEY:
 
-                                _ux_device_class_storage_report_key(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB); 
+                                _ux_device_class_storage_report_key(storage, lun, endpoint_in, endpoint_out, cbw_cb); 
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_GET_PERFORMANCE:
 
-                                _ux_device_class_storage_get_performance(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB); 
+                                _ux_device_class_storage_get_performance(storage, lun, endpoint_in, endpoint_out, cbw_cb); 
                                 break;
     
                             case UX_SLAVE_CLASS_STORAGE_SCSI_READ_DVD_STRUCTURE:
 
-                                _ux_device_class_storage_read_dvd_structure(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB); 
+                                _ux_device_class_storage_read_dvd_structure(storage, lun, endpoint_in, endpoint_out, cbw_cb); 
                                 break;
 
                             case UX_SLAVE_CLASS_STORAGE_SCSI_READ_TOC:
 
-                                status = _ux_device_class_storage_read_toc(storage, lun, endpoint_in, endpoint_out, scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_CB); 
+                                status = _ux_device_class_storage_read_toc(storage, lun, endpoint_in, endpoint_out, cbw_cb); 
 
                                 /* Special treatment of TOC command. If error, default to Stall endpoint.  */
                                 if (status == UX_SUCCESS)
                                     break;
-                                /* fall through */
 #endif
 
+                            /* fall through */
                             default:
     
                                 /* The command is unknown or unsupported, so we stall the endpoint.  */
 
-                                if (_ux_utility_long_get(scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_DATA_LENGTH) > 0 &&
-                                    ((*(scsi_command + UX_SLAVE_CLASS_STORAGE_CBW_FLAGS) & 0x80) == 0))
+                                if (storage -> ux_slave_class_storage_host_length > 0 &&
+                                    ((storage -> ux_slave_class_storage_cbw_flags & 0x80) == 0))
 
                                     /* Data-Out from host to device, stall OUT.  */
                                     _ux_device_stack_endpoint_stall(endpoint_out);
@@ -344,9 +373,9 @@ UCHAR                       *scsi_command;
                                     _ux_device_stack_endpoint_stall(endpoint_in);
                                 
                                 /* Initialize the request sense keys.  */
-                                storage -> ux_slave_class_storage_lun[lun].ux_slave_class_storage_request_sense_key =       UX_SLAVE_CLASS_STORAGE_SENSE_KEY_ILLEGAL_REQUEST;
-                                storage -> ux_slave_class_storage_lun[lun].ux_slave_class_storage_request_code =            UX_SLAVE_CLASS_STORAGE_ASC_KEY_INVALID_COMMAND;
-                                storage -> ux_slave_class_storage_lun[lun].ux_slave_class_storage_request_code_qualifier =  0;
+                                storage -> ux_slave_class_storage_lun[lun].ux_slave_class_storage_request_sense_status =
+                                    UX_DEVICE_CLASS_STORAGE_SENSE_STATUS(UX_SLAVE_CLASS_STORAGE_SENSE_KEY_ILLEGAL_REQUEST,
+                                                                         UX_SLAVE_CLASS_STORAGE_ASC_KEY_INVALID_COMMAND,0);
 
                                 /* This is the tricky part of the SCSI state machine. We must send the CSW BUT need to wait
                                    for the endpoint_in to be reset by the host.  */
@@ -357,15 +386,8 @@ UCHAR                       *scsi_command;
                                     if (endpoint_in -> ux_slave_endpoint_state == UX_ENDPOINT_RESET)
                                     {
 
-                                        /* Now we return a CSW with failure.  */
-                                        status =  _ux_device_class_storage_csw_send(storage, lun, endpoint_in, UX_SLAVE_CLASS_STORAGE_CSW_FAILED);
-            
-                                        /* Check error code. */
-                                        if (status != UX_SUCCESS)
-
-                                            /* Error trap. */
-                                            _ux_system_error_handler(UX_SYSTEM_LEVEL_THREAD, UX_SYSTEM_CONTEXT_CLASS, status);
-            
+                                        /* Now we set the CSW with failure.  */
+                                        storage -> ux_slave_class_storage_csw_status = UX_SLAVE_CLASS_STORAGE_CSW_FAILED;
                                         break;
                                     }                                        
 
@@ -376,27 +398,36 @@ UCHAR                       *scsi_command;
                                 }
                                 break;
                             }
+
+                            /* Send CSW if not SYNC_CACHE.  */
+                            status = _ux_device_class_storage_csw_send(storage, lun, endpoint_in, 0 /* Don't care */);
+
+                            /* Check error code. */
+                            if (status != UX_SUCCESS)
+
+                                /* Error trap. */
+                                _ux_system_error_handler(UX_SYSTEM_LEVEL_THREAD, UX_SYSTEM_CONTEXT_CLASS, status);
                         }
                         else
 
                             /* Phase error!  */
-                            storage -> ux_slave_class_storage_phase_error = TX_TRUE;
+                            storage -> ux_slave_class_storage_csw_status = UX_SLAVE_CLASS_STORAGE_CSW_PHASE_ERROR;
                     }
                     
                     else
 
                         /* Phase error!  */
-                        storage -> ux_slave_class_storage_phase_error = TX_TRUE;
+                        storage -> ux_slave_class_storage_csw_status = UX_SLAVE_CLASS_STORAGE_CSW_PHASE_ERROR;
                 }
                 else
 
                     /* Phase error!  */
-                    storage -> ux_slave_class_storage_phase_error = TX_TRUE;
+                    storage -> ux_slave_class_storage_csw_status = UX_SLAVE_CLASS_STORAGE_CSW_PHASE_ERROR;
             }
             else
             {
 
-                if (storage -> ux_slave_class_storage_phase_error == TX_TRUE)
+                if ((UCHAR)storage -> ux_slave_class_storage_csw_status == UX_SLAVE_CLASS_STORAGE_CSW_PHASE_ERROR)
                 {
 
                     /* We should keep the endpoints stalled.  */
@@ -405,7 +436,7 @@ UCHAR                       *scsi_command;
                 }
 
                 /* We must therefore wait a while.  */
-                _ux_utility_thread_relinquish();
+                _ux_utility_delay_ms(2);
             }
         }
 

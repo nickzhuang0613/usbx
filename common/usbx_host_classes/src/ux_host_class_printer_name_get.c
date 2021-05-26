@@ -35,7 +35,7 @@
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
 /*    _ux_host_class_printer_name_get                     PORTABLE C      */ 
-/*                                                           6.0          */
+/*                                                           6.1.4        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -64,13 +64,21 @@
 /*                                                                        */ 
 /*  CALLED BY                                                             */ 
 /*                                                                        */ 
-/*    Application                                                         */ 
+/*    Printer Class                                                       */ 
 /*                                                                        */ 
 /*  RELEASE HISTORY                                                       */ 
 /*                                                                        */ 
 /*    DATE              NAME                      DESCRIPTION             */ 
 /*                                                                        */ 
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            verified memset and memcpy  */
+/*                                            cases,                      */
+/*                                            resulting in version 6.1    */
+/*  02-02-2021     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            supported interface other   */
+/*                                            than number zero,           */
+/*                                            resulting in version 6.1.4  */
 /*                                                                        */
 /**************************************************************************/
 UINT  _ux_host_class_printer_name_get(UX_HOST_CLASS_PRINTER *printer)
@@ -79,6 +87,7 @@ UINT  _ux_host_class_printer_name_get(UX_HOST_CLASS_PRINTER *printer)
 UCHAR *         descriptor_buffer;
 UCHAR *         printer_name_buffer;
 UCHAR *         printer_name;
+UX_INTERFACE    *interface;
 UX_ENDPOINT     *control_endpoint;
 UX_TRANSFER     *transfer_request;
 UINT            status;
@@ -97,13 +106,17 @@ UINT            printer_name_length;
     if(descriptor_buffer == UX_NULL)
         return(UX_MEMORY_INSUFFICIENT);
 
+    /* Need interface for wIndex.  */
+    interface = printer -> ux_host_class_printer_interface;
+
     /* Create a transfer request for the GET_DEVICE_ID request.  */
     transfer_request -> ux_transfer_request_data_pointer =      descriptor_buffer;
     transfer_request -> ux_transfer_request_requested_length =  UX_HOST_CLASS_PRINTER_DESCRIPTOR_LENGTH;
     transfer_request -> ux_transfer_request_function =          UX_HOST_CLASS_PRINTER_GET_DEVICE_ID;
     transfer_request -> ux_transfer_request_type =              UX_REQUEST_IN | UX_REQUEST_TYPE_CLASS | UX_REQUEST_TARGET_INTERFACE;
-    transfer_request -> ux_transfer_request_value =             0;
-    transfer_request -> ux_transfer_request_index =             0;
+    transfer_request -> ux_transfer_request_value =             0; /* Do not support multiple configuration for now.  */
+    transfer_request -> ux_transfer_request_index =             (interface -> ux_interface_descriptor.bInterfaceNumber  << 8) |
+                                                                (interface -> ux_interface_descriptor.bAlternateSetting     );
 
     /* Send request to HCD layer.  */
     status =  _ux_host_stack_transfer_request(transfer_request);
@@ -163,7 +176,7 @@ UINT            printer_name_length;
         {
 
             /* Use the generic USB printer name.  */
-            _ux_utility_memory_copy(printer -> ux_host_class_printer_name, UX_HOST_CLASS_PRINTER_GENERIC_NAME, 11);
+            _ux_utility_memory_copy(printer -> ux_host_class_printer_name, UX_HOST_CLASS_PRINTER_GENERIC_NAME, 11); /* Use case of memcpy is verified. */
         }
         else
         {

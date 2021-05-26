@@ -34,7 +34,7 @@
 /*  FUNCTION                                               RELEASE        */
 /*                                                                        */
 /*    _ux_host_stack_new_device_create                    PORTABLE C      */
-/*                                                           6.0          */
+/*                                                           6.1.4        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -59,6 +59,8 @@
 /*                                            without creating an         */
 /*                                            OVER_CURRENT condition on   */
 /*                                            the bus                     */
+/*    created_device                        Destination to fill created   */
+/*                                            device instance             */
 /*                                                                        */
 /*  OUTPUT                                                                */
 /*                                                                        */
@@ -92,11 +94,20 @@
 /*    DATE              NAME                      DESCRIPTION             */
 /*                                                                        */
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            optimized based on compile  */
+/*                                            definitions,                */
+/*                                            resulting in version 6.1    */
+/*  02-02-2021     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            added a new parameter to    */
+/*                                            return created device,      */
+/*                                            resulting in version 6.1.4  */
 /*                                                                        */
 /**************************************************************************/
 UINT  _ux_host_stack_new_device_create(UX_HCD *hcd, UX_DEVICE *device_owner,
                                 UINT port_index, UINT device_speed,
-                                UINT port_max_power)
+                                UINT port_max_power,
+                                UX_DEVICE **created_device)
 {
 
 UX_DEVICE           *device;
@@ -104,6 +115,7 @@ UINT                status;
 UX_ENDPOINT         *control_endpoint;
 
 
+#if UX_MAX_DEVICES > 1
     /* Verify the number of devices attached to the HCD already. Normally a HCD
        can have up to 127 devices but that can be tailored.  */
     if (hcd -> ux_hcd_nb_devices > UX_MAX_USB_DEVICES)
@@ -117,6 +129,7 @@ UX_ENDPOINT         *control_endpoint;
 
         return(UX_TOO_MANY_DEVICES);
     }
+#endif
 
     /* Get a new device container to store this new device.  */
     device =  _ux_host_stack_new_device_get();
@@ -132,6 +145,9 @@ UX_ENDPOINT         *control_endpoint;
         return(UX_TOO_MANY_DEVICES);
     }
 
+    /* Store the device instance.  */
+    *created_device = device;
+
     /* Increment the number of devices on this bus.  */
     hcd -> ux_hcd_nb_devices++;
 
@@ -143,11 +159,11 @@ UX_ENDPOINT         *control_endpoint;
        Initialize the device structure.  */
     device -> ux_device_handle =         (ULONG) (ALIGN_TYPE) device;
     device -> ux_device_state =          UX_DEVICE_ATTACHED;
-    device -> ux_device_parent =         device_owner;
-    device -> ux_device_hcd =            hcd;
     device -> ux_device_speed =          device_speed;
-    device -> ux_device_port_location =  port_index;
-    device -> ux_device_max_power =      port_max_power;
+    UX_DEVICE_MAX_POWER_SET(device, port_max_power);
+    UX_DEVICE_PARENT_SET(device, device_owner);
+    UX_DEVICE_HCD_SET(device, hcd);
+    UX_DEVICE_PORT_LOCATION_SET(device, port_index);
 
     /* Create a semaphore for the device. This is to protect endpoint 0 mostly for OTG HNP polling. The initial count is 1 as
        a mutex mechanism.  */

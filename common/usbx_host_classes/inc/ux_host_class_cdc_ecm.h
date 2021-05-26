@@ -26,7 +26,7 @@
 /*  COMPONENT DEFINITION                                   RELEASE        */ 
 /*                                                                        */ 
 /*    ux_host_class_cdc_ecm.h                             PORTABLE C      */ 
-/*                                                           6.0          */
+/*                                                           6.1.4        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -41,6 +41,15 @@
 /*    DATE              NAME                      DESCRIPTION             */ 
 /*                                                                        */ 
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            used UX prefix to refer to  */
+/*                                            TX symbols instead of using */
+/*                                            them directly,              */
+/*                                            resulting in version 6.1    */
+/*  02-02-2021     Xiuwen Cai               Modified comment(s), added    */
+/*                                            compile option for using    */
+/*                                            packet pool from NetX,      */
+/*                                            resulting in version 6.1.4  */
 /*                                                                        */
 /**************************************************************************/
 
@@ -205,6 +214,12 @@
 #define UX_HOST_CLASS_CDC_ECM_PACKET_POOL_WAIT                  1000
 #endif
 
+/* Define packet pool waiting time in milliseconds.  */
+
+#ifndef UX_HOST_CLASS_CDC_ECM_PACKET_POOL_INSTANCE_WAIT
+#define UX_HOST_CLASS_CDC_ECM_PACKET_POOL_INSTANCE_WAIT         100
+#endif
+
 /* Define  CDC_ECM Class instance structure.  */
 
 typedef struct UX_HOST_CLASS_CDC_ECM_STRUCT
@@ -220,14 +235,14 @@ typedef struct UX_HOST_CLASS_CDC_ECM_STRUCT
     UX_INTERFACE    *ux_host_class_cdc_ecm_interface_control;
     UCHAR           ux_host_class_cdc_ecm_bulk_in_transfer_check_and_arm_in_process;
     UCHAR           ux_host_class_cdc_ecm_bulk_in_transfer_waiting_for_check_and_arm_to_finish;
-    TX_SEMAPHORE    ux_host_class_cdc_ecm_bulk_in_transfer_waiting_for_check_and_arm_to_finish_semaphore;
+    UX_SEMAPHORE    ux_host_class_cdc_ecm_bulk_in_transfer_waiting_for_check_and_arm_to_finish_semaphore;
     UCHAR           ux_host_class_cdc_ecm_bulk_out_transfer_check_and_arm_in_process;
     UCHAR           ux_host_class_cdc_ecm_bulk_out_transfer_waiting_for_check_and_arm_to_finish;
-    TX_SEMAPHORE    ux_host_class_cdc_ecm_bulk_out_transfer_waiting_for_check_and_arm_to_finish_semaphore;
+    UX_SEMAPHORE    ux_host_class_cdc_ecm_bulk_out_transfer_waiting_for_check_and_arm_to_finish_semaphore;
     UINT            ux_host_class_cdc_ecm_instance_status;
     UINT            ux_host_class_cdc_ecm_state;
-    TX_SEMAPHORE    ux_host_class_cdc_ecm_interrupt_notification_semaphore;
-    TX_THREAD       ux_host_class_cdc_ecm_thread;
+    UX_SEMAPHORE    ux_host_class_cdc_ecm_interrupt_notification_semaphore;
+    UX_THREAD       ux_host_class_cdc_ecm_thread;
     UCHAR           *ux_host_class_cdc_ecm_thread_stack;
     ULONG           ux_host_class_cdc_ecm_notification_count;
     ULONG           ux_host_class_cdc_ecm_primary_phy_id;
@@ -241,8 +256,13 @@ typedef struct UX_HOST_CLASS_CDC_ECM_STRUCT
     ULONG           ux_host_class_cdc_ecm_link_state;
     NX_PACKET       *ux_host_class_cdc_ecm_xmit_queue_head;
     NX_PACKET       *ux_host_class_cdc_ecm_xmit_queue_tail;
+#ifndef UX_HOST_CLASS_CDC_ECM_USE_PACKET_POOL_FROM_NETX
     NX_PACKET_POOL  ux_host_class_cdc_ecm_packet_pool;
     UCHAR           *ux_host_class_cdc_ecm_pool_memory;
+#else
+    NX_PACKET_POOL  *ux_host_class_cdc_ecm_packet_pool;
+#endif
+
     UCHAR           ux_host_class_cdc_ecm_node_id[UX_HOST_CLASS_CDC_ECM_NODE_ID_LENGTH];
     VOID            (*ux_host_class_cdc_ecm_device_status_change_callback)(struct UX_HOST_CLASS_CDC_ECM_STRUCT *cdc_ecm, 
                                                                 ULONG  device_state);

@@ -35,7 +35,7 @@
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
 /*    _ux_host_class_cdc_acm_write                        PORTABLE C      */ 
-/*                                                           6.0          */
+/*                                                           6.1.3        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -72,6 +72,11 @@
 /*    DATE              NAME                      DESCRIPTION             */ 
 /*                                                                        */ 
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            resulting in version 6.1    */
+/*  12-31-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            fixed ZLP sending,          */
+/*                                            resulting in version 6.1.3  */
 /*                                                                        */
 /**************************************************************************/
 UINT  _ux_host_class_cdc_acm_write(UX_HOST_CLASS_CDC_ACM *cdc_acm, UCHAR *data_pointer, 
@@ -120,7 +125,7 @@ ULONG           transfer_request_length;
     
     /* Perform a transfer on the bulk out endpoint until either the transfer is
        completed or when there is an error.  */
-    while (requested_length)
+    do
     {
 
         /* Program the maximum authorized length for this transfer_request.  */
@@ -192,7 +197,8 @@ ULONG           transfer_request_length;
         
         /* Update what is left to send out.  */
         requested_length -=  transfer_request_length;          
-    }    
+
+    } while (requested_length);
 
     /* We get here when all the transfers went through without errors.  */
     return(UX_SUCCESS); 

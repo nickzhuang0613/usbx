@@ -35,7 +35,7 @@
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
 /*    _ux_device_class_storage_control_request            PORTABLE C      */ 
-/*                                                           6.0          */
+/*                                                           6.1.3        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -67,6 +67,12 @@
 /*    DATE              NAME                      DESCRIPTION             */ 
 /*                                                                        */ 
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            optimized command logic,    */
+/*                                            resulting in version 6.1    */
+/*  12-31-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            fixed USB CV test issues,   */
+/*                                            resulting in version 6.1.3  */
 /*                                                                        */
 /**************************************************************************/
 UINT  _ux_device_class_storage_control_request(UX_SLAVE_CLASS_COMMAND *command)
@@ -76,6 +82,8 @@ UX_SLAVE_TRANSFER           *transfer_request;
 UX_SLAVE_DEVICE             *device;
 UX_SLAVE_CLASS              *class;
 ULONG                       request;
+ULONG                       request_value;
+ULONG                       request_length;
 UX_SLAVE_CLASS_STORAGE      *storage;
 UX_SLAVE_INTERFACE          *interface;
 UX_SLAVE_ENDPOINT           *endpoint_in;
@@ -90,6 +98,12 @@ UX_SLAVE_ENDPOINT           *endpoint_out;
     
     /* Extract the request type from the SETUP packet..   */
     request =  *(transfer_request -> ux_slave_transfer_request_setup + UX_SETUP_REQUEST);
+    request_value = _ux_utility_short_get(transfer_request -> ux_slave_transfer_request_setup + UX_SETUP_VALUE);
+    request_length = _ux_utility_short_get(transfer_request -> ux_slave_transfer_request_setup + UX_SETUP_LENGTH);
+
+    /* Check if wValue is valid.  */
+    if (request_value != 0)
+        return(UX_ERROR);
 
     /* Get the class container.  */
     class =  command -> ux_slave_class_command_class_ptr;
@@ -102,6 +116,10 @@ UX_SLAVE_ENDPOINT           *endpoint_out;
     {
 
     case UX_SLAVE_CLASS_STORAGE_RESET:
+
+        /* Check if wLength is valid.  */
+        if (request_length != 0)
+            return(UX_ERROR);
 
         /* We need the interface to the class.  */
         interface =  storage -> ux_slave_class_storage_interface;
@@ -135,11 +153,15 @@ UX_SLAVE_ENDPOINT           *endpoint_out;
         _ux_device_stack_transfer_abort(transfer_request, UX_TRANSFER_APPLICATION_RESET);
 
         /* Reset phase error.  */
-        storage -> ux_slave_class_storage_phase_error = UX_FALSE;
+        storage -> ux_slave_class_storage_csw_status = UX_SLAVE_CLASS_STORAGE_CSW_PASSED;
 
         break;
 
     case UX_SLAVE_CLASS_STORAGE_GET_MAX_LUN:
+
+        /* Check if wLength is valid.  */
+        if (request_length < 1)
+            return(UX_ERROR);
 
         /* Set the value of the number of LUN in the buffer. The max number of LUN is the
            number of declared LUN - 1.  */
@@ -154,8 +176,8 @@ UX_SLAVE_ENDPOINT           *endpoint_out;
 
     default:
 
-            /* Unknown function. It's not handled.  */
-            return(UX_ERROR);
+        /* Unknown function. It's not handled.  */
+        return(UX_ERROR);
     }
 
     /* It's handled.  */

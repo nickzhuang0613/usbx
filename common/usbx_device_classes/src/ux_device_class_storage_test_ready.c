@@ -35,7 +35,7 @@
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
 /*    _ux_device_class_storage_test_ready                 PORTABLE C      */ 
-/*                                                           6.0          */
+/*                                                           6.1.3        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -72,6 +72,12 @@
 /*    DATE              NAME                      DESCRIPTION             */ 
 /*                                                                        */ 
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            optimized command logic,    */
+/*                                            resulting in version 6.1    */
+/*  12-31-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            fixed USB CV test issues,   */
+/*                                            resulting in version 6.1.3  */
 /*                                                                        */
 /**************************************************************************/
 UINT  _ux_device_class_storage_test_ready(UX_SLAVE_CLASS_STORAGE *storage, ULONG lun, UX_SLAVE_ENDPOINT *endpoint_in,
@@ -81,8 +87,10 @@ UINT  _ux_device_class_storage_test_ready(UX_SLAVE_CLASS_STORAGE *storage, ULONG
 UINT        status;
 ULONG        media_status;
 
-    UX_PARAMETER_NOT_USED(cbwcb);
+    UX_PARAMETER_NOT_USED(lun);
+    UX_PARAMETER_NOT_USED(endpoint_in);
     UX_PARAMETER_NOT_USED(endpoint_out);
+    UX_PARAMETER_NOT_USED(cbwcb);
 
     /* If trace is enabled, insert this event into the trace buffer.  */
     UX_TRACE_IN_LINE_INSERT(UX_TRACE_DEVICE_CLASS_STORAGE_TEST_READY, storage, lun, 0, 0, UX_TRACE_DEVICE_CLASS_EVENTS, 0, 0)
@@ -92,24 +100,20 @@ ULONG        media_status;
                                 storage -> ux_slave_class_storage_lun[lun].ux_slave_class_storage_media_id, &media_status);
 
     /* Set the sense/code/qualifier codes for the REQUEST_SENSE command.  */
-    storage -> ux_slave_class_storage_lun[lun].ux_slave_class_storage_request_sense_key =       (media_status & 0xff);
-    storage -> ux_slave_class_storage_lun[lun].ux_slave_class_storage_request_code =            ((media_status >> 8) & 0xff);
-    storage -> ux_slave_class_storage_lun[lun].ux_slave_class_storage_request_code_qualifier =  ((media_status >> 16) & 0xff);
+    storage -> ux_slave_class_storage_lun[lun].ux_slave_class_storage_request_sense_status = media_status;
 
-    /* Check the status for error.  */
-    if (status != UX_SUCCESS)
+    /* Return CSW with success/error.  */
+    storage -> ux_slave_class_storage_csw_status = (status == UX_SUCCESS) ?
+                            UX_SLAVE_CLASS_STORAGE_CSW_PASSED : UX_SLAVE_CLASS_STORAGE_CSW_FAILED;
+    status = UX_SUCCESS;
+
+    /* Case (9) Ho > Dn.  */
+    if (storage -> ux_slave_class_storage_host_length)
     {
-
-        /* We return a CSW with error.  */
-        status =  _ux_device_class_storage_csw_send(storage, lun, endpoint_in, UX_SLAVE_CLASS_STORAGE_CSW_FAILED);
-    }        
-    else
-    {
-
-        /* We return a CSW with success.  */
-        status =  _ux_device_class_storage_csw_send(storage, lun, endpoint_in, UX_SLAVE_CLASS_STORAGE_CSW_PASSED);
+        _ux_device_stack_endpoint_stall(endpoint_out);
+        storage -> ux_slave_class_storage_csw_residue = storage -> ux_slave_class_storage_host_length;
     }
-    
+
     /* Return completion status.  */
     return(status);
 }

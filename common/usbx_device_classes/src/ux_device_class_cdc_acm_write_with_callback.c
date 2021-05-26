@@ -34,7 +34,7 @@
 /*  FUNCTION                                               RELEASE        */
 /*                                                                        */
 /*    _ux_device_class_cdc_acm_write_with_callback        PORTABLE C      */
-/*                                                           6.0          */
+/*                                                           6.1.6        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -67,12 +67,26 @@
 /*    DATE              NAME                      DESCRIPTION             */
 /*                                                                        */
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            used UX prefix to refer to  */
+/*                                            TX symbols instead of using */
+/*                                            them directly,              */
+/*                                            resulting in version 6.1    */
+/*  04-02-2021     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            added macro to disable      */
+/*                                            transmission support,       */
+/*                                            resulting in version 6.1.6  */
 /*                                                                        */
 /**************************************************************************/
 UINT _ux_device_class_cdc_acm_write_with_callback(UX_SLAVE_CLASS_CDC_ACM *cdc_acm, UCHAR *buffer,
                                 ULONG requested_length)
 {
-
+#ifdef UX_DEVICE_CLASS_CDC_ACM_TRANSMISSION_DISABLE
+    UX_PARAMETER_NOT_USED(cdc_acm);
+    UX_PARAMETER_NOT_USED(buffer);
+    UX_PARAMETER_NOT_USED(requested_length);
+    return(UX_FUNCTION_NOT_SUPPORTED);
+#else
 UX_SLAVE_DEVICE             *device;
 UINT                        status;
 
@@ -123,10 +137,10 @@ UINT                        status;
     cdc_acm -> ux_slave_class_cdc_acm_scheduled_write = UX_TRUE;
 
     /* Invoke the bulkin thread by sending a flag .  */
-    status = _ux_utility_event_flags_set(&cdc_acm -> ux_slave_class_cdc_acm_event_flags_group, UX_DEVICE_CLASS_CDC_ACM_WRITE_EVENT, TX_OR);
+    status = _ux_utility_event_flags_set(&cdc_acm -> ux_slave_class_cdc_acm_event_flags_group, UX_DEVICE_CLASS_CDC_ACM_WRITE_EVENT, UX_OR);
 
     /* Simply return the last function result.  When we leave this function, the deferred writing has been scheduled. */
     return(status);
-
+#endif
 }
 

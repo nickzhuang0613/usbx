@@ -36,7 +36,7 @@ UX_HOST_CLASS_CDC_ECM_NX_ETHERNET_POOL_ALLOCSIZE_ASSERT
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
 /*    _ux_host_class_cdc_ecm_activate                     PORTABLE C      */ 
-/*                                                           6.0          */
+/*                                                           6.1.4        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -80,6 +80,15 @@ UX_HOST_CLASS_CDC_ECM_NX_ETHERNET_POOL_ALLOCSIZE_ASSERT
 /*    DATE              NAME                      DESCRIPTION             */ 
 /*                                                                        */ 
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            used UX prefix to refer to  */
+/*                                            TX symbols instead of using */
+/*                                            them directly,              */
+/*                                            resulting in version 6.1    */
+/*  02-02-2021     Xiuwen Cai               Modified comment(s), added    */
+/*                                            compile option for using    */
+/*                                            packet pool from NetX,      */
+/*                                            resulting in version 6.1.4  */
 /*                                                                        */
 /**************************************************************************/
 UINT  _ux_host_class_cdc_ecm_activate(UX_HOST_CLASS_COMMAND *command)
@@ -188,7 +197,7 @@ UX_INTERFACE                        *cur_interface;
         if (cdc_ecm -> ux_host_class_cdc_ecm_thread_stack == UX_NULL)
             status =  UX_MEMORY_INSUFFICIENT;
     }
-
+#ifndef UX_HOST_CLASS_CDC_ECM_USE_PACKET_POOL_FROM_NETX
     if (status == UX_SUCCESS)
     {
 
@@ -200,7 +209,7 @@ UX_INTERFACE                        *cur_interface;
         if (cdc_ecm -> ux_host_class_cdc_ecm_pool_memory == UX_NULL)
             status =  UX_MEMORY_INSUFFICIENT;
     }
-
+#endif
     if (status == UX_SUCCESS)
     {
 
@@ -220,13 +229,13 @@ UX_INTERFACE                        *cur_interface;
                 status =  _ux_utility_semaphore_create(&cdc_ecm -> ux_host_class_cdc_ecm_interrupt_notification_semaphore, "host CDC-ECM interrupt notification semaphore", 0);
                 if (status == UX_SUCCESS)
                 {
-
+#ifndef UX_HOST_CLASS_CDC_ECM_USE_PACKET_POOL_FROM_NETX
                     /* Create a packet pool.  */
                     status =  nx_packet_pool_create(&cdc_ecm -> ux_host_class_cdc_ecm_packet_pool, "host CDC-ECM packet pool", 
                                                 UX_HOST_CLASS_CDC_ECM_NX_PAYLOAD_SIZE, cdc_ecm -> ux_host_class_cdc_ecm_pool_memory, UX_HOST_CLASS_CDC_ECM_NX_ETHERNET_POOL_ALLOCSIZE);
                     if (status == UX_SUCCESS)
                     {
-
+#endif
                         /* Create the cdc_ecm class thread. We do not start it yet.  */
                         status =  _ux_utility_thread_create(&cdc_ecm -> ux_host_class_cdc_ecm_thread,
                                                 "ux_host_cdc_ecm_thread", _ux_host_class_cdc_ecm_thread,
@@ -235,7 +244,7 @@ UX_INTERFACE                        *cur_interface;
                                                 UX_THREAD_STACK_SIZE, 
                                                 UX_THREAD_PRIORITY_CLASS,
                                                 UX_THREAD_PRIORITY_CLASS,
-                                                TX_NO_TIME_SLICE, TX_DONT_START);
+                                                UX_NO_TIME_SLICE, UX_DONT_START);
                         if (status == UX_SUCCESS)
                         {
 
@@ -329,7 +338,7 @@ UX_INTERFACE                        *cur_interface;
                             /* Delete CDC-ECM thread.  */
                             _ux_utility_thread_delete(&cdc_ecm -> ux_host_class_cdc_ecm_thread);
                         }
-
+#ifndef UX_HOST_CLASS_CDC_ECM_USE_PACKET_POOL_FROM_NETX
                         /* Delete packet pool.  */
                         nx_packet_pool_delete(&cdc_ecm -> ux_host_class_cdc_ecm_packet_pool);
                     }
@@ -339,7 +348,7 @@ UX_INTERFACE                        *cur_interface;
                         /* Packet pool creation failed. Notify application.  */
                         _ux_system_error_handler(UX_SYSTEM_LEVEL_THREAD, UX_SYSTEM_CONTEXT_ENUMERATOR, status);
                     }
-
+#endif
                     /* Delete interrupt notification semaphore.  */
                     _ux_utility_semaphore_delete(&cdc_ecm -> ux_host_class_cdc_ecm_interrupt_notification_semaphore);
                 }
@@ -358,10 +367,10 @@ UX_INTERFACE                        *cur_interface;
     if (cdc_ecm -> ux_host_class_cdc_ecm_interrupt_endpoint != UX_NULL &&
         cdc_ecm -> ux_host_class_cdc_ecm_interrupt_endpoint -> ux_endpoint_transfer_request.ux_transfer_request_data_pointer != UX_NULL)
         _ux_utility_memory_free(cdc_ecm -> ux_host_class_cdc_ecm_interrupt_endpoint -> ux_endpoint_transfer_request.ux_transfer_request_data_pointer);
-
+#ifndef UX_HOST_CLASS_CDC_ECM_USE_PACKET_POOL_FROM_NETX
     if (cdc_ecm -> ux_host_class_cdc_ecm_pool_memory != UX_NULL)
         _ux_utility_memory_free(cdc_ecm -> ux_host_class_cdc_ecm_pool_memory);
-
+#endif
     if (cdc_ecm -> ux_host_class_cdc_ecm_thread_stack != UX_NULL)
         _ux_utility_memory_free(cdc_ecm -> ux_host_class_cdc_ecm_thread_stack);
 

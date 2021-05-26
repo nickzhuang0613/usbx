@@ -26,7 +26,7 @@
 /*  COMPONENT DEFINITION                                   RELEASE        */ 
 /*                                                                        */ 
 /*    ux_device_class_hid.h                               PORTABLE C      */ 
-/*                                                           6.0          */
+/*                                                           6.1.3        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
@@ -41,6 +41,15 @@
 /*    DATE              NAME                      DESCRIPTION             */ 
 /*                                                                        */ 
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
+/*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            used UX prefix to refer to  */
+/*                                            TX symbols instead of using */
+/*                                            them directly,              */
+/*                                            resulting in version 6.1    */
+/*  12-31-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            added Get/Set Protocol      */
+/*                                            request support,            */
+/*                                            resulting in version 6.1.3  */
 /*                                                                        */
 /**************************************************************************/
 
@@ -73,6 +82,11 @@
 #define UX_DEVICE_CLASS_HID_REPORT_TYPE_INPUT                       0x1
 #define UX_DEVICE_CLASS_HID_REPORT_TYPE_OUTPUT                      0x2
 #define UX_DEVICE_CLASS_HID_REPORT_TYPE_FEATURE                     0x3
+
+/* Define HID Protocols.  */
+
+#define UX_DEVICE_CLASS_HID_PROTOCOL_BOOT                           0
+#define UX_DEVICE_CLASS_HID_PROTOCOL_REPORT                         1
 
 /* Define HID event info structure.  */
 
@@ -122,9 +136,10 @@ typedef struct UX_SLAVE_CLASS_HID_STRUCT
     UCHAR                           *ux_device_class_hid_report_address;
     ULONG                           ux_device_class_hid_report_id;
     ULONG                           ux_device_class_hid_report_length;
-    TX_EVENT_FLAGS_GROUP            ux_device_class_hid_event_flags_group;
+    UX_EVENT_FLAGS_GROUP            ux_device_class_hid_event_flags_group;
     ULONG                           ux_device_class_hid_event_idle_rate;
     ULONG                           ux_device_class_hid_event_wait_timeout;
+    ULONG                           ux_device_class_hid_protocol;
     UX_SLAVE_CLASS_HID_EVENT        *ux_device_class_hid_event_array;
     UX_SLAVE_CLASS_HID_EVENT        *ux_device_class_hid_event_array_head;
     UX_SLAVE_CLASS_HID_EVENT        *ux_device_class_hid_event_array_tail;
@@ -166,8 +181,7 @@ UINT  _ux_device_class_hid_report_set(UX_SLAVE_CLASS_HID *hid, ULONG descriptor_
                                             ULONG request_index, ULONG host_length);
 UINT  _ux_device_class_hid_report_get(UX_SLAVE_CLASS_HID *hid, ULONG descriptor_type, 
                                             ULONG request_index, ULONG host_length);
-                                      
-                                      
+
 /* Define Device HID Class API prototypes.  */
 
 #define ux_device_class_hid_entry        _ux_device_class_hid_entry   
@@ -175,6 +189,8 @@ UINT  _ux_device_class_hid_report_get(UX_SLAVE_CLASS_HID *hid, ULONG descriptor_
 #define ux_device_class_hid_event_get    _ux_device_class_hid_event_get
 #define ux_device_class_hid_report_set   _ux_device_class_hid_report_set
 #define ux_device_class_hid_report_get   _ux_device_class_hid_report_get
+
+#define ux_device_class_hid_protocol_get(hid) (hid -> ux_device_class_hid_protocol)
 
 
 #endif
